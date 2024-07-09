@@ -1,12 +1,12 @@
-﻿{
-  "id": "testmod",
-  "name": "Test Mod",
-  "version": "0.1.0",
-  "authors": "Author",
-  "target_game_version": "v1.9",
-  "description": "Put a neat description here",
-  "tags": [],
-  "requirements": [],
-  "requirements_names": [],
-  "checksum_override_version": false
+{
+    "id": "znery.backrooms",
+    "name": "The Backrooms",
+    "version": "1.1",
+    "authors": "znery",
+	"description": "It's a maze, it's a mess, it's coming for you and it's gonna get you. <LINE>It's The Backrooms",
+	"requirements": ["bro.mergefix"],
+	"requirement_names": ["Merge Fix"],
+    "priorities": ["moreslugcats"],
+	"tags": ["Regions"],
+    "checksum_override_version": false
 }
