@@ -9,7 +9,7 @@ using System.Security.Permissions;
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
 #pragma warning restore CS0618
 
-namespace Backrooms;
+namespace TheBackrooms;
 
 [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
 sealed class BackroomsMain : BaseUnityPlugin
@@ -34,19 +34,14 @@ sealed class BackroomsMain : BaseUnityPlugin
 
     public void OnEnable()
     {
-        // Add hooks here
         On.RainWorld.OnModsInit += OnModsInit;
         On.RainWorldGame.Update += OnGameUpdate;
-        //On.ArtificialIntelligence.Update += ArtificialIntelligence_Update_Hook;
-        //On.AbstractCreatureAI.AbstractBehavior += AbstractCreatureAI_AbstractBehavior_Hook;
     }
 
     public void OnDisable()
     {
         On.RainWorld.OnModsInit -= OnModsInit;
         On.RainWorldGame.Update -= OnGameUpdate;
-        //On.ArtificialIntelligence.Update -= ArtificialIntelligence_Update_Hook;
-        //On.AbstractCreatureAI.AbstractBehavior -= AbstractCreatureAI_AbstractBehavior_Hook;
     }
 
     private void LogOnce(object data, bool once)
@@ -54,7 +49,6 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         if (logFlags[0] && once) return;
 
-        //Logger.LogDebug("pursuer found:");
         UnityEngine.Debug.Log(data);
         logFlags[0] = true;
     }
@@ -103,17 +97,13 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         if (this.pursuer == null)
         {
-            //for (int i = 0; i < self.world.NumberOfRooms; i++)
-            //{
             AbstractRoom abstractRoom = self.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + self.world.firstRoomIndex);
             if (abstractRoom == null)
             {
-                //continue;
                 return;
             }
             if (abstractRoom.creatures.Count <= 0)
             {
-                //continue;
                 return;
             }
             logString += $"room {abstractRoom.name} has creatures #";
@@ -123,11 +113,8 @@ sealed class BackroomsMain : BaseUnityPlugin
                 if (abstractRoom.creatures[j].creatureTemplate.type == MoreSlugcatsEnums.CreatureTemplateType.TrainLizard)
                 {
                     this.pursuer = abstractRoom.creatures[j];
-                    //string isNull = (pursuer != null) ? "not null" : "null";
-                    //LogTimed(120, 5, "pursuer is " + isNull);
                 }
             }
-            //}
             return;
         }
         if (this.pursuer.state.dead) return;
@@ -149,7 +136,6 @@ sealed class BackroomsMain : BaseUnityPlugin
         {
             logString += "pursuer realai is null #";
             this.pursuer.Room.RealizeRoom(self.world, self);
-            //this.pursuer.Realize();
             return;
         }
         if (this.pursuer.abstractAI.RealAI.tracker == null)
@@ -157,7 +143,6 @@ sealed class BackroomsMain : BaseUnityPlugin
             logString += "pursuer tracker is null #";
             return;
         }
-        logString += $"pursuer agression: {this.pursuer.abstractAI.RealAI.CurrentPlayerAggression(this.targetPlayer.abstractCreature)} #";
         this.pursuer.abstractAI.RealAI.tracker.SeeCreature(this.targetPlayer.abstractCreature);
         logString += $"pursuer sees player, pursuer agression: {this.pursuer.abstractAI.RealAI.CurrentPlayerAggression(this.targetPlayer.abstractCreature)} #";
         if (this.currentRoom != this.pursuer.Room.name)
@@ -172,65 +157,4 @@ sealed class BackroomsMain : BaseUnityPlugin
             //self.cameras[0].hud.textPrompt.AddMessage(Expedition.ChallengeTools.IGT.Translate("You are being pursued..."), 10, 250, true, true);
         }
     }
-
-    /*
-    private void ArtificialIntelligence_Update_Hook(On.ArtificialIntelligence.orig_Update orig, ArtificialIntelligence ai)
-    {
-        orig(ai);
-
-        Logger.LogDebug("ai update");
-        Logger.LogDebug(ai.creature.world.name);
-
-        if (ai.creature.world.name == "BK" && ai.tracker != null && ai.creature.world.game.Players != null)
-        {
-            int j = 0;
-            while (j < ai.creature.world.game.Players.Count)
-            {
-                if (ai.creature.world.game.Players[j].realizedCreature != null && !(ai.creature.world.game.Players[j].realizedCreature as Player).dead)
-                {
-                    if (ai.creature.Room != ai.creature.world.game.Players[j].Room)
-                    {
-                        ai.tracker.SeeCreature(ai.creature.world.game.Players[j]);
-                        return;
-                    }
-                    break;
-                }
-                else
-                {
-                    j++;
-                }
-            }
-        }
-    }
-
-    private void AbstractCreatureAI_AbstractBehavior_Hook(On.AbstractCreatureAI.orig_AbstractBehavior orig, AbstractCreatureAI ai, int time)
-    {
-        orig(ai, time);
-
-        Logger.LogDebug("abs ai abs behv");
-        Logger.LogDebug(ai.parent.world.name);
-
-        if (ai.parent.world.name == "BK" && ai.parent.world.game.Players != null)
-        {
-            int j = 0;
-            while (j < ai.parent.world.game.Players.Count)
-            {
-                AbstractCreature abstractCreature = ai.parent.world.game.Players[j];
-                if (abstractCreature.realizedCreature != null && !(abstractCreature.realizedCreature as Player).dead)
-                {
-                    if (abstractCreature.pos.NodeDefined && abstractCreature.Room.nodes[abstractCreature.pos.abstractNode].type.Index != -1 && ai.parent.creatureTemplate.mappedNodeTypes[abstractCreature.Room.nodes[abstractCreature.pos.abstractNode].type.Index])
-                    {
-                        ai.SetDestination(abstractCreature.pos);
-                        return;
-                    }
-                    break;
-                }
-                else
-                {
-                    j++;
-                }
-            }
-        }
-    }
-    */
 }
