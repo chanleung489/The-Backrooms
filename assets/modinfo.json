@@ -4,8 +4,8 @@
     "version": "1.1",
     "authors": "znery",
 	"description": "It's a maze, it's a mess, it's coming for you and it's gonna get you. <LINE>It's The Backrooms",
-	"requirements": ["bro.mergefix"],
-	"requirement_names": ["Merge Fix"],
+	"requirements": ["bro.mergefix", "regionkit"],
+	"requirement_names": ["Merge Fix", "RegionKit"],
     "priorities": ["moreslugcats"],
 	"tags": ["Regions"],
     "checksum_override_version": false

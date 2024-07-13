@@ -18,17 +18,20 @@ sealed class BackroomsMain : BaseUnityPlugin
     public const string PLUGIN_NAME = "The Backrooms";
     public const string PLUGIN_VERSION = "1.0";
 
-    //private static readonly CreatureTemplate.Type TRAIN_TYPE = MoreSlugcatsEnums.CreatureTemplateType.TrainLizard;
-    //private static readonly CreatureTemplate.Type RED_CENTI_TYPE = CreatureTemplate.Type.RedCentipede;
-    private static readonly int BK_CENTER_ROOM_INDEX = 87;
+    static readonly int BK_CENTER_ROOM_INDEX = 87;
 
-    private AbstractCreature pursuer;
-    private Player targetPlayer;
-    private WorldCoordinate destination;
-    private string currentRoom;
-    private int[] logCooldowns = new int[16];
-    private bool[] logFlags = new bool[16];
-    private string logString = "";
+    AbstractCreature pursuer;
+    Player targetPlayer;
+    WorldCoordinate destination;
+    string currentRoom;
+    bool pursuerDead;
+
+    int[] logCooldowns = new int[16];
+    bool[] logFlags = new bool[16]; 
+    string logString = "";
+
+    bool shownRoomWarning = false;
+    bool shownWarning = false;
 
     bool init;
 
@@ -36,24 +39,19 @@ sealed class BackroomsMain : BaseUnityPlugin
     {
         On.RainWorld.OnModsInit += OnModsInit;
         On.RainWorldGame.Update += OnGameUpdate;
+        On.AbstractSpaceVisualizer.ChangeRoom += OnChangeRoom;
+        On.World.LoadWorld += OnLoadWorld;
     }
 
     public void OnDisable()
     {
         On.RainWorld.OnModsInit -= OnModsInit;
         On.RainWorldGame.Update -= OnGameUpdate;
+        On.AbstractSpaceVisualizer.ChangeRoom -= OnChangeRoom;
+        On.World.LoadWorld -= OnLoadWorld;
     }
 
-    private void LogOnce(object data, bool once)
-    {
-
-        if (logFlags[0] && once) return;
-
-        UnityEngine.Debug.Log(data);
-        logFlags[0] = true;
-    }
-
-    private void LogTimed(int time, int index, string logs)
+    void LogTimed(int time, int index, string logs)
     {
         logCooldowns[index]++;
         if (logCooldowns[index] >= time)
@@ -73,26 +71,60 @@ sealed class BackroomsMain : BaseUnityPlugin
         logFlags[index] = true;
     }
 
-    private void OnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
+    void OnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
     {
         orig(self);
 
+        MachineConnector.SetRegisteredOI(PLUGIN_GUID, new BackroomsOptions());
+
         if (init) return;
-
         init = true;
-
         Logger.LogDebug("Init");
     }
 
-    private void OnGameUpdate(On.RainWorldGame.orig_Update orig, RainWorldGame self)
+    void OnLoadWorld(On.World.orig_LoadWorld orig, World self, SlugcatStats.Name slugcatNumber, List<AbstractRoom> abstractRoomsList, int[] swarmRooms, int[] shelters, int[] gates)
+    {
+        orig(self, slugcatNumber, abstractRoomsList, swarmRooms, shelters, gates);
+
+        pursuer = null;
+        targetPlayer = null;
+        currentRoom = null;
+        pursuerDead = false;
+        shownRoomWarning = false;
+        shownWarning = false;
+
+        Logger.LogDebug("Load world");
+    }
+
+    void OnChangeRoom(On.AbstractSpaceVisualizer.orig_ChangeRoom orig, AbstractSpaceVisualizer self, Room newRoom)
+    {
+        orig(self, newRoom);
+
+        if (self.room == null) return;
+
+        if (shownRoomWarning) return;
+
+        if (self.room.abstractRoom == self.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + self.world.firstRoomIndex))
+        {
+            self.world.game.cameras[0].hud.textPrompt.AddMessage("DONT MOVE STAY STILL", 10, 250, true, true);
+            shownRoomWarning = true;
+        }
+    }
+
+    void OnGameUpdate(On.RainWorldGame.orig_Update orig, RainWorldGame self)
     {
         orig(self);
+        LogTimed(480, 1, logString);
+        logString = "";
+
+        logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead {pursuerDead} #";
+
+        if (BackroomsOptions.dangerlevel.Value == 2) return;
+        if (pursuerDead) return;
 
         if (self.world == null) return;
         if (self.world.name != "BK") return;
 
-        LogTimed(360, 1, logString);
-        logString = "";
         logString += $"region is bk, bk has {self.world.NumberOfRooms} rooms #";
 
         if (this.pursuer == null)
@@ -113,7 +145,13 @@ sealed class BackroomsMain : BaseUnityPlugin
                 if (abstractRoom.creatures[j].creatureTemplate.type == MoreSlugcatsEnums.CreatureTemplateType.TrainLizard)
                 {
                     this.pursuer = abstractRoom.creatures[j];
+                    break;
                 }
+            }
+            if (BackroomsOptions.dangerlevel.Value == 1)
+            {
+                this.pursuer.Die();
+                pursuerDead = this.pursuer.state.dead ? true : false;
             }
             return;
         }
@@ -147,14 +185,21 @@ sealed class BackroomsMain : BaseUnityPlugin
         logString += $"pursuer sees player, pursuer agression: {this.pursuer.abstractAI.RealAI.CurrentPlayerAggression(this.targetPlayer.abstractCreature)} #";
         if (this.currentRoom != this.pursuer.Room.name)
         {
-            UnityEngine.Debug.Log("Pursuer moving to: " + this.currentRoom);
+            UnityEngine.Debug.Log("Pursuer moving from: " + this.currentRoom + " to " + this.pursuer.Room.name);
             this.currentRoom = this.pursuer.Room.name;
         }
         if (this.pursuer.abstractAI.destination != this.destination)
         {
             this.destination = this.targetPlayer.abstractCreature.pos;
             this.pursuer.abstractAI.SetDestination(this.destination);
-            //self.cameras[0].hud.textPrompt.AddMessage(Expedition.ChallengeTools.IGT.Translate("You are being pursued..."), 10, 250, true, true);
         }
+        if (shownWarning) return;
+        foreach (int connection in this.pursuer.Room.connections)
+        {
+            if (connection != this.targetPlayer.abstractCreature.pos.room || this.pursuer.abstractAI.destination != this.destination) continue;
+            self.world.game.cameras[0].hud.textPrompt.AddMessage("DONT MOVE STAY STILL", 10, 250, true, true);
+            shownWarning = true;
+        }
+
     }
 }
