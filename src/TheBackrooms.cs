@@ -141,7 +141,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     {
         orig(self);
         LogTimed(480, 1, logString);
-        logString = "";
+        logString = "#";
 
         logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead: {pursuerDead} #";
 
