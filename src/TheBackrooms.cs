@@ -101,7 +101,6 @@ sealed class BackroomsMain : BaseUnityPlugin
         orig(self, newRoom);
 
         if (self.room == null) return;
-
         if (shownRoomWarning) return;
 
         if (self.room.abstractRoom == self.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + self.world.firstRoomIndex))
@@ -117,7 +116,7 @@ sealed class BackroomsMain : BaseUnityPlugin
         LogTimed(480, 1, logString);
         logString = "";
 
-        logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead {pursuerDead} #";
+        logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead: {pursuerDead} #";
 
         if (BackroomsOptions.dangerlevel.Value == 2) return;
         if (pursuerDead) return;
@@ -127,7 +126,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         logString += $"region is bk, bk has {self.world.NumberOfRooms} rooms #";
 
-        if (this.pursuer == null)
+        if (pursuer == null)
         {
             AbstractRoom abstractRoom = self.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + self.world.firstRoomIndex);
             if (abstractRoom == null)
@@ -144,59 +143,65 @@ sealed class BackroomsMain : BaseUnityPlugin
                 logString += $"creature {j} is {abstractRoom.creatures[j].creatureTemplate.type} #";
                 if (abstractRoom.creatures[j].creatureTemplate.type == MoreSlugcatsEnums.CreatureTemplateType.TrainLizard)
                 {
-                    this.pursuer = abstractRoom.creatures[j];
+                    pursuer = abstractRoom.creatures[j];
                     break;
                 }
             }
             if (BackroomsOptions.dangerlevel.Value == 1)
             {
-                this.pursuer.Die();
-                pursuerDead = this.pursuer.state.dead ? true : false;
+                pursuer.Die();
+                pursuerDead = pursuer.state.dead;
             }
             return;
         }
-        if (this.pursuer.state.dead) return;
-        logString += $"pursuer is {this.pursuer} #";
+        if (pursuer.state.dead) return;
+        logString += $"pursuer is {pursuer} #";
 
-        if (this.targetPlayer == null)
+        if (targetPlayer == null)
         {
             for (int i = 0; i < self.Players.Count; i++)
             {
                 if (self.Players[i] != null && self.Players[i].realizedCreature != null && !self.Players[i].realizedCreature.dead)
                 {
-                    this.targetPlayer = (self.Players[i].realizedCreature as Player);
+                    targetPlayer = (self.Players[i].realizedCreature as Player);
                 }
             }
         }
 
-        if (this.pursuer.abstractAI == null) return;
-        if (this.pursuer.abstractAI.RealAI == null)
+        if (pursuer.abstractAI == null) return;
+        if (pursuer.abstractAI.RealAI == null)
         {
             logString += "pursuer realai is null #";
-            this.pursuer.Room.RealizeRoom(self.world, self);
+            pursuer.Room.RealizeRoom(self.world, self);
             return;
         }
-        if (this.pursuer.abstractAI.RealAI.tracker == null)
+        if (pursuer.abstractAI.RealAI.tracker == null)
         {
             logString += "pursuer tracker is null #";
             return;
         }
-        this.pursuer.abstractAI.RealAI.tracker.SeeCreature(this.targetPlayer.abstractCreature);
-        logString += $"pursuer sees player, pursuer agression: {this.pursuer.abstractAI.RealAI.CurrentPlayerAggression(this.targetPlayer.abstractCreature)} #";
-        if (this.currentRoom != this.pursuer.Room.name)
+        pursuer.abstractAI.RealAI.tracker.SeeCreature(targetPlayer.abstractCreature);
+        logString += $"pursuer sees player, pursuer agression: {pursuer.abstractAI.RealAI.CurrentPlayerAggression(targetPlayer.abstractCreature)} #";
+        if (currentRoom != pursuer.Room.name)
         {
-            UnityEngine.Debug.Log("Pursuer moving from: " + this.currentRoom + " to " + this.pursuer.Room.name);
-            this.currentRoom = this.pursuer.Room.name;
+            UnityEngine.Debug.Log("Pursuer moving from: " + currentRoom + " to " + pursuer.Room.name);
+            currentRoom = pursuer.Room.name;
         }
-        if (this.pursuer.abstractAI.destination != this.destination)
+        if (pursuer.abstractAI.destination != destination)
         {
-            this.destination = this.targetPlayer.abstractCreature.pos;
-            this.pursuer.abstractAI.SetDestination(this.destination);
+            destination = targetPlayer.abstractCreature.pos;
+            pursuer.abstractAI.SetDestination(destination);
+        }
+
+        if (!BackroomsOptions.scaryWarning.Value)
+        {
+            logString += "scary warning: " + BackroomsOptions.scaryWarning.Value;
+            return;
         }
         if (shownWarning) return;
-        foreach (int connection in this.pursuer.Room.connections)
+        foreach (int connection in pursuer.Room.connections)
         {
-            if (connection != this.targetPlayer.abstractCreature.pos.room || this.pursuer.abstractAI.destination != this.destination) continue;
+            if (connection != targetPlayer.abstractCreature.pos.room || pursuer.abstractAI.destination != destination) continue;
             self.world.game.cameras[0].hud.textPrompt.AddMessage("DONT MOVE STAY STILL", 10, 250, true, true);
             shownWarning = true;
         }

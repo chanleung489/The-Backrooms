@@ -6,6 +6,7 @@ namespace TheBackrooms;
 sealed class BackroomsOptions : OptionInterface
 {
     public static Configurable<int> dangerlevel;
+    public static Configurable<bool> scaryWarning;
 
     public BackroomsOptions()
     {
@@ -13,9 +14,14 @@ sealed class BackroomsOptions : OptionInterface
             key: "dangerlevel",
             defaultValue: 3,
             info: new ConfigurableInfo(
-                description: "No threats - Creature spawns - Creature actively hunts player",
+                description: "No threats | Creature spawns | Creature actively hunts player",
                 acceptable: new ConfigAcceptableRange<int>(1, 3)
             )
+        );
+        scaryWarning = this.config.Bind<bool>(
+            key: "scaryWarning",
+            defaultValue: false,
+            info: new ConfigurableInfo("Show scary warning")
         );
     }
 
@@ -37,6 +43,13 @@ sealed class BackroomsOptions : OptionInterface
             {
                 description = dangerlevel.info.description
             },
+
+            new OpLabel(new Vector2(x + 40, y -= 30), Vector2.zero, "Scary Warning"),
+            new OpCheckBox(scaryWarning, new Vector2(x + 100, y - 4))
+            {
+                description = scaryWarning.info.description
+            },
+
         };
 
         Tabs[0].AddItems(uielements);
