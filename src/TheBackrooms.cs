@@ -26,8 +26,10 @@ sealed class BackroomsMain : BaseUnityPlugin
     WorldCoordinate destination;
     string currentRoom;
     bool pursuerDead;
-    bool warpping;
+    bool warping;
     int clippedTimer = 0;
+    Warper warper;
+    FadeOut fadeOut;
 
     int[] logCooldowns = new int[16];
     bool[] logFlags = new bool[16]; 
@@ -113,8 +115,46 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
     }
 
+    void FadeOutForEveryone (RainWorldGame game, bool fadeIn)
+    {
+        foreach (AbstractCreature player in game.NonPermaDeadPlayers)
+        {
+            if (!game.cameras[0].InCutscene)
+            {
+                game.cameras[0].EnterCutsceneMode(player, RoomCamera.CameraCutsceneType.EndingOE);
+            }
+            if (fadeOut == null)
+            {
+                fadeOut = new FadeOut(player.Room.realizedRoom, Color.black, 60f, fadeIn);
+                player.Room.realizedRoom.AddObject(fadeOut);
+            }
+        }
+    }
+
     void WarpOnClipping(RainWorldGame game)
     {
+        if (warping)
+        {
+            FadeOutForEveryone(game, fadeIn: false);
+            if (fadeOut != null && fadeOut.IsDoneFading() && warper == null)
+            {
+                warper = new Warper();
+                warper.WarpIntoBK(game);
+                fadeOut = null;
+                warping = false;
+
+                foreach (AbstractCreature player in game.NonPermaDeadPlayers)
+                {
+                    player.realizedCreature.Stun(120);
+                }
+                FadeOutForEveryone(game, fadeIn: true);
+                UnityEngine.Debug.Log("fading in");
+                game.cameras[0].ExitCutsceneMode();
+            }
+            return;
+        }
+
+        if (targetPlayer.inShortcut) return;
         if (!targetPlayer.GoThroughFloors)
         {
             clippedTimer = 0;
@@ -122,19 +162,10 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
         clippedTimer += 1;
         if (clippedTimer % 40 == 0) UnityEngine.Debug.Log(clippedTimer); 
-        if (clippedTimer < 120) return;
+        if (clippedTimer < 150) return;
 
-        warpping = true;
+        warping = true;
 
-        Warpper warpper = new Warpper();
-        try
-        {
-            warpper.WarpIntoBK(game);
-        }
-        catch (Exception e)
-        {
-            UnityEngine.Debug.LogException(e);
-        }
     }
 
     void OnGameUpdate(On.RainWorldGame.orig_Update orig, RainWorldGame self)
@@ -163,9 +194,7 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
         if (self.world.name != "BK")
         {
-            if (warpping || targetPlayer.inShortcut) return;
             WarpOnClipping(self);
-            warpping = false;
             return;
         }
 

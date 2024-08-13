@@ -4,10 +4,9 @@ using UnityEngine;
 
 namespace TheBackrooms;
 
-sealed class Warpper
+sealed class Warper
 {
     bool firstPlayer = true;
-    private MethodInfo _OverWorld_LoadWorld = typeof(OverWorld).GetMethod("LoadWorld", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
     public void WarpIntoBK(RainWorldGame game)
     {
@@ -15,8 +14,7 @@ sealed class Warpper
         UnityEngine.Debug.Log("activeWorld: " + origin_world.name);
         AbstractRoom origin_room = origin_world.GetAbstractRoom(game.Players[0].pos);
 
-        //game.overWorld.LoadWorld("BK", game.overWorld.PlayerCharacterNumber, false);
-        _OverWorld_LoadWorld.Invoke(game.overWorld, new object[] { "BK", game.overWorld.PlayerCharacterNumber, false });
+        game.overWorld.LoadWorld("BK", game.overWorld.PlayerCharacterNumber, false);
         World bk_world = game.overWorld.activeWorld;
         UnityEngine.Debug.Log("activeWorld: " + bk_world.name);
 
@@ -55,7 +53,7 @@ sealed class Warpper
             }
         }
 
-        foreach (AbstractCreature player in game.Players)
+        foreach (AbstractCreature player in game.NonPermaDeadPlayers)
         {
             if (player.realizedCreature.room != null)
             {
@@ -64,7 +62,7 @@ sealed class Warpper
             origin_room.RemoveEntity(player);
 
             player.world = bk_world;
-            WorldCoordinate newPos = new WorldCoordinate(bk_room.index, 25, 23, abstractNode);
+            WorldCoordinate newPos = new WorldCoordinate(bk_room.index, 24, 23, abstractNode);
             player.pos = newPos;
             UnityEngine.Debug.Log("player pos: " + player.pos);
 
@@ -86,8 +84,6 @@ sealed class Warpper
                 (player.realizedCreature as Player).objectInStomach.world = bk_world;
             }
 
-            bk_world.GetAbstractRoom(newPos).AddEntity(player);
-            player.realizedCreature.PlaceInRoom(bk_room.realizedRoom);
             player.Move(newPos);
             //player.Move(bk_room.realizedRoom.LocalCoordinateOfNode(0));
 
@@ -106,6 +102,8 @@ sealed class Warpper
             {
                 bk_room.world.game.roomRealizer.followCreature = player;
             }
+
+            UnityEngine.Debug.Log("player inshortcut:" + player.realizedCreature.inShortcut);
 
         }
 
@@ -145,6 +143,31 @@ sealed class Warpper
             }
         }
 
-        UnityEngine.Debug.Log("done warpping");
+        origin_world.regionState.AdaptRegionStateToWorld(-1, bk_room.index);
+        if (origin_world.regionState != null)
+        {
+            origin_world.regionState.world = null;
+        }
+		bk_world.rainCycle.baseCycleLength = origin_world.rainCycle.baseCycleLength;
+		bk_world.rainCycle.cycleLength = origin_world.rainCycle.cycleLength;
+		bk_world.rainCycle.timer = origin_world.rainCycle.timer;
+		bk_world.rainCycle.duskPalette = origin_world.rainCycle.duskPalette;
+		bk_world.rainCycle.nightPalette = origin_world.rainCycle.nightPalette;
+		bk_world.rainCycle.dayNightCounter = origin_world.rainCycle.dayNightCounter;
+		if (ModManager.MSC)
+		{
+			if (origin_world.rainCycle.timer == 0)
+			{
+				bk_world.rainCycle.preTimer = origin_world.rainCycle.preTimer;
+				bk_world.rainCycle.maxPreTimer = origin_world.rainCycle.maxPreTimer;
+			}
+			else
+			{
+				bk_world.rainCycle.preTimer = 0;
+				bk_world.rainCycle.maxPreTimer = 0;
+			}
+		}
+
+        UnityEngine.Debug.Log("done warping");
     }
 }
