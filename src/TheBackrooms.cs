@@ -1,5 +1,6 @@
 ﻿using BepInEx;
 using MoreSlugcats;
+using RWCustom;
 using System;
 using System.Collections.Generic;
 using System.Security.Permissions;
@@ -117,7 +118,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 
     void FadeOutForEveryone (RainWorldGame game, bool fadeIn)
     {
-        foreach (AbstractCreature player in game.NonPermaDeadPlayers)
+        foreach (AbstractCreature player in game.AlivePlayers)
         {
             if (!game.cameras[0].InCutscene)
             {
@@ -143,7 +144,7 @@ sealed class BackroomsMain : BaseUnityPlugin
                 fadeOut = null;
                 warping = false;
 
-                foreach (AbstractCreature player in game.NonPermaDeadPlayers)
+                foreach (AbstractCreature player in game.AlivePlayers)
                 {
                     player.realizedCreature.Stun(120);
                 }
@@ -154,15 +155,18 @@ sealed class BackroomsMain : BaseUnityPlugin
             return;
         }
 
-        if (targetPlayer.inShortcut) return;
-        if (!targetPlayer.GoThroughFloors)
+        if (targetPlayer.room == null) return;
+        IntVector2 intVector = targetPlayer.room.GetTilePosition((targetPlayer.mainBodyChunk.pos.y < targetPlayer.bodyChunks[1].pos.y) ? targetPlayer.mainBodyChunk.pos : targetPlayer.bodyChunks[1].pos);
+        //Room.Tile.TerrainType terrainType = targetPlayer.room.GetTile(intVector).Terrain;
+        //LogTimed(20, 2, $"player pos terrain: {terrainType}");
+        if (!targetPlayer.GoThroughFloors || targetPlayer.room.GetTile(intVector).Solid == false)
         {
             clippedTimer = 0;
             return;
         }
         clippedTimer += 1;
-        if (clippedTimer % 40 == 0) UnityEngine.Debug.Log(clippedTimer); 
-        if (clippedTimer < 150) return;
+        if (clippedTimer % 40 == 0) UnityEngine.Debug.Log(clippedTimer);
+        if (clippedTimer < 200) return;
 
         warping = true;
 

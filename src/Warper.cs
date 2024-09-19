@@ -1,110 +1,206 @@
+using On;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace TheBackrooms;
 
 sealed class Warper
 {
+    World originWorld;
+    World bkWorld;
+    AbstractRoom originRoom;
+    AbstractRoom bkRoom;
     bool firstPlayer = true;
+    Spear spear;
 
-    public void WarpIntoBK(RainWorldGame game)
+    void LoadAllLoadingRooms(World world)
     {
-        World origin_world = game.overWorld.activeWorld;
-        UnityEngine.Debug.Log("activeWorld: " + origin_world.name);
-        AbstractRoom origin_room = origin_world.GetAbstractRoom(game.Players[0].pos);
-
-        game.overWorld.LoadWorld("BK", game.overWorld.PlayerCharacterNumber, false);
-        World bk_world = game.overWorld.activeWorld;
-        UnityEngine.Debug.Log("activeWorld: " + bk_world.name);
-
-        AbstractRoom bk_room = bk_world.GetAbstractRoom("BK_A001");
-        UnityEngine.Debug.Log("bk abstract room: " + bk_room.name);
-
-        if (game.roomRealizer != null)
+        while (world.loadingRooms.Count > 0)
         {
-            game.roomRealizer = new RoomRealizer(game.roomRealizer.followCreature, bk_world);
-        }
-        bk_room.RealizeRoom(bk_world, game);
-
-        while (bk_world.loadingRooms.Count > 0)
-        {
-            for (int j = bk_world.loadingRooms.Count - 1; j >= 0; j--)
+            for (int i = world.loadingRooms.Count - 1; i >= 0; i--)
             {
-                if (bk_world.loadingRooms[j].done)
+                if (world.loadingRooms[i].done)
                 {
-                    bk_world.loadingRooms.RemoveAt(j);
+                    world.loadingRooms.RemoveAt(i);
                 }
                 else
                 {
-                    bk_world.loadingRooms[j].Update();
+                    world.loadingRooms[i].Update();
                 }
             }
         }
-        UnityEngine.Debug.Log("bk realized room: " + bk_room.realizedRoom);
+    }
+
+    void TrackObjects(AbstractCreature player)
+    {
+
+        List<AbstractPhysicalObject> allConnectedObjects = player?.GetAllConnectedObjects();
+        if (allConnectedObjects != null)
+        {
+            foreach (AbstractPhysicalObject obj in allConnectedObjects)
+            {
+                if (obj == null) continue;
+                obj.world = bkWorld;
+                obj.pos = bkRoom.realizedRoom.LocalCoordinateOfNode(0);
+                obj.Room?.RemoveEntity(obj);
+                bkRoom.AddEntity(obj);
+                if (obj.realizedObject == null) continue;
+                obj.realizedObject.sticksRespawned = true;
+            }
+        }
+
+        if (player.realizedCreature is not Player realizedPlayer) return;
+
+        if (realizedPlayer.objectInStomach != null)
+        {
+            realizedPlayer.objectInStomach.world = bkWorld;
+        }
+
+        spear = realizedPlayer.spearOnBack?.spear ?? null;
+
+        if (realizedPlayer.grasps == null) return;
+        for (int j = 0; j < realizedPlayer.grasps.Length; j++)
+        {
+            Player.Grasp grasp = realizedPlayer.grasps[j];
+            if (grasp == null) continue;
+            PhysicalObject physicalObject = grasp.grabbed;
+            if (physicalObject == null) continue;
+
+            if (!grasp.discontinued && physicalObject is Creature && !(physicalObject is Player || (physicalObject as Player).isSlugpup))
+            {
+                realizedPlayer.ReleaseGrasp(j);
+            }
+        }
+
+        if (!firstPlayer) return;
+        foreach (AbstractPhysicalObject obj in allConnectedObjects)
+        {
+            int count = 0;
+            for (int i = 0; i < bkRoom.realizedRoom.updateList.Count; i++)
+            {
+                if (obj.realizedObject == bkRoom.realizedRoom.updateList[i])
+                {
+                    count++;
+                }
+                if (count > 1)
+                {
+                    bkRoom.realizedRoom.updateList.RemoveAt(i);
+                }
+            }
+        }
+    }
+
+    void MoveObjects(AbstractCreature player)
+    {
+        if (player.realizedCreature is Player realizedPlayer && spear != null && realizedPlayer.spearOnBack != null && realizedPlayer.spearOnBack.spear != spear)
+        {
+            realizedPlayer.spearOnBack.SpearToBack(spear);
+            realizedPlayer.abstractPhysicalObject.stuckObjects.Add(realizedPlayer.spearOnBack.abstractStick);
+        }
+    }
+
+    void WarpPlayer(AbstractCreature player, int abstractNode)
+    {
+        if ((player.realizedCreature as Player).slugOnBack != null && (player.realizedCreature as Player).slugOnBack.HasASlug)
+        {
+            (player.realizedCreature as Player).slugOnBack.DropSlug();
+        }
+        player.realizedCreature.room?.RemoveObject(player.realizedCreature);
+        originRoom.RemoveEntity(player);
+
+        player.world = bkWorld;
+        WorldCoordinate newPos = new WorldCoordinate(bkRoom.index, 24, 23, abstractNode);
+        player.pos = newPos;
+        UnityEngine.Debug.Log("player pos: " + player.pos);
+
+        bkRoom.realizedRoom.aimap.NewWorld(bkRoom.index);
+
+        TrackObjects(player);
+
+        player.Move(newPos);
+        UnityEngine.Debug.Log("moved player");
+
+        player.RealizeInRoom();
+
+        if (player.creatureTemplate.AI)
+        {
+            player.abstractAI.NewWorld(bkWorld);
+            player.InitiateAI();
+            player.abstractAI.RealAI.NewRoom(bkRoom.realizedRoom);
+        }
+
+        MoveObjects(player);
+
+        bkRoom.world.game.roomRealizer.followCreature = player;
+
+        if (firstPlayer)
+        {
+            firstPlayer = false;
+        }
+    }
+
+    void SyncWorldStates()
+    {
+        originWorld.regionState.AdaptRegionStateToWorld(-1, bkRoom.index);
+        if (originWorld.regionState != null)
+        {
+            originWorld.regionState.world = null;
+        }
+		bkWorld.rainCycle.baseCycleLength = originWorld.rainCycle.baseCycleLength;
+		bkWorld.rainCycle.cycleLength = originWorld.rainCycle.cycleLength;
+		bkWorld.rainCycle.timer = originWorld.rainCycle.timer;
+		bkWorld.rainCycle.duskPalette = originWorld.rainCycle.duskPalette;
+		bkWorld.rainCycle.nightPalette = originWorld.rainCycle.nightPalette;
+		bkWorld.rainCycle.dayNightCounter = originWorld.rainCycle.dayNightCounter;
+		if (ModManager.MSC)
+		{
+			if (originWorld.rainCycle.timer == 0)
+			{
+				bkWorld.rainCycle.preTimer = originWorld.rainCycle.preTimer;
+				bkWorld.rainCycle.maxPreTimer = originWorld.rainCycle.maxPreTimer;
+			}
+			else
+			{
+				bkWorld.rainCycle.preTimer = 0;
+				bkWorld.rainCycle.maxPreTimer = 0;
+			}
+		}
+    }
+
+    public void WarpIntoBK(RainWorldGame game)
+    {
+        originWorld = game.overWorld.activeWorld;
+        originRoom = originWorld.GetAbstractRoom(game.Players[0].pos);
+
+        game.overWorld.LoadWorld("BK", game.overWorld.PlayerCharacterNumber, false);
+
+        bkWorld = game.overWorld.activeWorld;
+        bkRoom = bkWorld.GetAbstractRoom("BK_A001");
+
+        if (game.roomRealizer != null)
+        {
+            game.roomRealizer = new RoomRealizer(game.roomRealizer.followCreature, bkWorld);
+        }
+        bkRoom.RealizeRoom(bkWorld, game);
+
+        LoadAllLoadingRooms(bkWorld);
+        UnityEngine.Debug.Log("bk realized room: " + bkRoom.realizedRoom);
 
         int abstractNode = -1;
-        for (int k = 0; k < bk_room.nodes.Length; k++)
+        for (int k = 0; k < bkRoom.nodes.Length; k++)
         {
-            if (bk_room.nodes[k].type == AbstractRoomNode.Type.Exit && k < bk_room.connections.Length && bk_room.connections[k] > -1)
+            if (bkRoom.nodes[k].type == AbstractRoomNode.Type.Exit && k < bkRoom.connections.Length && bkRoom.connections[k] > -1)
             {
                 abstractNode = k;
                 break;
             }
         }
 
-        foreach (AbstractCreature player in game.NonPermaDeadPlayers)
+        foreach (AbstractCreature player in game.AlivePlayers)
         {
-            if (player.realizedCreature.room != null)
-            {
-                player.realizedCreature.room.RemoveObject(player.realizedCreature);
-            }
-            origin_room.RemoveEntity(player);
-
-            player.world = bk_world;
-            WorldCoordinate newPos = new WorldCoordinate(bk_room.index, 24, 23, abstractNode);
-            player.pos = newPos;
-            UnityEngine.Debug.Log("player pos: " + player.pos);
-
-            bk_room.realizedRoom.aimap.NewWorld(bk_room.index);
-
-            if (player.GetAllConnectedObjects != null)
-            {
-                foreach (AbstractPhysicalObject connectedObject in player.GetAllConnectedObjects()) {
-                    connectedObject.world = bk_world;
-                    connectedObject.pos = player.pos;
-                    connectedObject.Room.RemoveEntity(connectedObject);
-                    bk_room.AddEntity(connectedObject);
-                    connectedObject.realizedObject.sticksRespawned = true;
-                }
-            }
-
-            if (player.realizedCreature != null && (player.realizedCreature as Player).objectInStomach != null)
-            {
-                (player.realizedCreature as Player).objectInStomach.world = bk_world;
-            }
-
-            player.Move(newPos);
-            //player.Move(bk_room.realizedRoom.LocalCoordinateOfNode(0));
-
-            UnityEngine.Debug.Log("moved player");
-
-            player.RealizeInRoom();
-
-            if (player.creatureTemplate.AI)
-            {
-                player.abstractAI.NewWorld(bk_world);
-                player.InitiateAI();
-                player.abstractAI.RealAI.NewRoom(bk_room.realizedRoom);
-            }
-
-            if (firstPlayer)
-            {
-                bk_room.world.game.roomRealizer.followCreature = player;
-            }
-
-            UnityEngine.Debug.Log("player inshortcut:" + player.realizedCreature.inShortcut);
-
+            WarpPlayer(player, abstractNode);
         }
 
         for (int n = game.shortcuts.transportVessels.Count - 1; n >= 0; n--)
@@ -130,12 +226,12 @@ sealed class Warper
         }
 
         game.cameras[0].virtualMicrophone.AllQuiet();
-        game.cameras[0].MoveCamera(bk_room.realizedRoom, 0);
+        game.cameras[0].MoveCamera(bkRoom.realizedRoom, 0);
         game.cameras[0].FireUpSinglePlayerHUD(game.AlivePlayers[0].realizedCreature as Player);
 
         foreach (RoomCamera camera in game.cameras)
         {
-            camera.hud.ResetMap(new HUD.Map.MapData(bk_world, game.rainWorld));
+            camera.hud.ResetMap(new HUD.Map.MapData(bkWorld, game.rainWorld));
             camera.dayNightNeedsRefresh = true;
             if (camera.hud.textPrompt.subregionTracker != null)
             {
@@ -143,30 +239,7 @@ sealed class Warper
             }
         }
 
-        origin_world.regionState.AdaptRegionStateToWorld(-1, bk_room.index);
-        if (origin_world.regionState != null)
-        {
-            origin_world.regionState.world = null;
-        }
-		bk_world.rainCycle.baseCycleLength = origin_world.rainCycle.baseCycleLength;
-		bk_world.rainCycle.cycleLength = origin_world.rainCycle.cycleLength;
-		bk_world.rainCycle.timer = origin_world.rainCycle.timer;
-		bk_world.rainCycle.duskPalette = origin_world.rainCycle.duskPalette;
-		bk_world.rainCycle.nightPalette = origin_world.rainCycle.nightPalette;
-		bk_world.rainCycle.dayNightCounter = origin_world.rainCycle.dayNightCounter;
-		if (ModManager.MSC)
-		{
-			if (origin_world.rainCycle.timer == 0)
-			{
-				bk_world.rainCycle.preTimer = origin_world.rainCycle.preTimer;
-				bk_world.rainCycle.maxPreTimer = origin_world.rainCycle.maxPreTimer;
-			}
-			else
-			{
-				bk_world.rainCycle.preTimer = 0;
-				bk_world.rainCycle.maxPreTimer = 0;
-			}
-		}
+        SyncWorldStates();
 
         UnityEngine.Debug.Log("done warping");
     }
