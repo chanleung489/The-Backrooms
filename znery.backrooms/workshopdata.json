@@ -1,0 +1,17 @@
+{
+  "Title": "The Backrooms",
+  "Description": "It\u0027s a maze, it\u0027s a mess, it\u0027s coming for you and it\u0027s gonna get you. \u003CLINE\u003EIt\u0027s The Backrooms",
+  "ID": "znery.backrooms",
+  "Version": "1.1",
+  "TargetGameVersion": "v1.9.06",
+  "Requirements": "bro.mergefix,regionkit",
+  "RequirementNames": "",
+  "Authors": "znery",
+  "Visibility": "Unlisted",
+  "Tags": [
+    "Regions"
+  ],
+  "WorkshopID": 3278042505,
+  "UploadFilesOnly": true,
+  "UploadThumbnail": false
+}
