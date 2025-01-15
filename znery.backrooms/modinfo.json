@@ -1,11 +1,11 @@
 {
     "id": "znery.backrooms",
     "name": "The Backrooms",
-    "version": "1.1",
+    "version": "1.2",
     "authors": "znery",
 	"description": "It's a maze, it's a mess, it's coming for you and it's gonna get you. <LINE>It's The Backrooms",
-	"requirements": ["bro.mergefix", "regionkit"],
-	"requirement_names": ["Merge Fix", "RegionKit"],
+	"requirements": ["bro.mergefix", "regionkit", "warp"],
+	"requirement_names": ["Merge Fix", "RegionKit", "Warp Menu"],
     "priorities": ["moreslugcats"],
 	"tags": ["Regions"],
     "checksum_override_version": false

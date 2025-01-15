@@ -1,7 +1,6 @@
 ﻿using BepInEx;
 using MoreSlugcats;
 using RWCustom;
-using System;
 using System.Collections.Generic;
 using System.Security.Permissions;
 using UnityEngine;
@@ -18,7 +17,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 {
     public const string PLUGIN_GUID = "znery.backrooms";
     public const string PLUGIN_NAME = "The Backrooms";
-    public const string PLUGIN_VERSION = "1.0";
+    public const string PLUGIN_VERSION = "1.2";
 
     static readonly int BK_CENTER_ROOM_INDEX = 87;
 
@@ -29,7 +28,6 @@ sealed class BackroomsMain : BaseUnityPlugin
     bool pursuerDead;
     bool warping;
     int clippedTimer = 0;
-    Warper warper;
     FadeOut fadeOut;
 
     int[] logCooldowns = new int[16];
@@ -137,10 +135,10 @@ sealed class BackroomsMain : BaseUnityPlugin
         if (warping)
         {
             FadeOutForEveryone(game, fadeIn: false);
-            if (fadeOut != null && fadeOut.IsDoneFading() && warper == null)
+            if (fadeOut != null && fadeOut.IsDoneFading())
             {
-                warper = new Warper();
-                warper.WarpIntoBK(game);
+                RegionSwitcher warper = new RegionSwitcher();
+                warper.SwitchRegions(game, "BK", "BK_A001", new IntVector2(460, 480));
                 fadeOut = null;
                 warping = false;
 
