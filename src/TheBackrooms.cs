@@ -1,8 +1,9 @@
 ﻿using BepInEx;
 using MoreSlugcats;
-using System;
+using RWCustom;
 using System.Collections.Generic;
 using System.Security.Permissions;
+using UnityEngine;
 
 // Allows access to private members
 #pragma warning disable CS0618
@@ -16,7 +17,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 {
     public const string PLUGIN_GUID = "znery.backrooms";
     public const string PLUGIN_NAME = "The Backrooms";
-    public const string PLUGIN_VERSION = "1.0";
+    public const string PLUGIN_VERSION = "1.2";
 
     static readonly int BK_CENTER_ROOM_INDEX = 87;
 
@@ -25,6 +26,9 @@ sealed class BackroomsMain : BaseUnityPlugin
     WorldCoordinate destination;
     string currentRoom;
     bool pursuerDead;
+    bool warping;
+    int clippedTimer = 0;
+    FadeOut fadeOut;
 
     int[] logCooldowns = new int[16];
     bool[] logFlags = new bool[16]; 
@@ -110,11 +114,67 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
     }
 
+    void FadeOutForEveryone (RainWorldGame game, bool fadeIn)
+    {
+        foreach (AbstractCreature player in game.AlivePlayers)
+        {
+            if (!game.cameras[0].InCutscene)
+            {
+                game.cameras[0].EnterCutsceneMode(player, RoomCamera.CameraCutsceneType.EndingOE);
+            }
+            if (fadeOut == null)
+            {
+                fadeOut = new FadeOut(player.Room.realizedRoom, Color.black, 60f, fadeIn);
+                player.Room.realizedRoom.AddObject(fadeOut);
+            }
+        }
+    }
+
+    void WarpOnClipping(RainWorldGame game)
+    {
+        if (warping)
+        {
+            FadeOutForEveryone(game, fadeIn: false);
+            if (fadeOut != null && fadeOut.IsDoneFading())
+            {
+                RegionSwitcher warper = new RegionSwitcher();
+                warper.SwitchRegions(game, "BK", "BK_A001", new IntVector2(460, 480));
+                fadeOut = null;
+                warping = false;
+
+                foreach (AbstractCreature player in game.AlivePlayers)
+                {
+                    player.realizedCreature.Stun(120);
+                }
+                FadeOutForEveryone(game, fadeIn: true);
+                UnityEngine.Debug.Log("fading in");
+                game.cameras[0].ExitCutsceneMode();
+            }
+            return;
+        }
+
+        if (targetPlayer.room == null) return;
+        IntVector2 intVector = targetPlayer.room.GetTilePosition((targetPlayer.mainBodyChunk.pos.y < targetPlayer.bodyChunks[1].pos.y) ? targetPlayer.mainBodyChunk.pos : targetPlayer.bodyChunks[1].pos);
+        //Room.Tile.TerrainType terrainType = targetPlayer.room.GetTile(intVector).Terrain;
+        //LogTimed(20, 2, $"player pos terrain: {terrainType}");
+        if (!targetPlayer.GoThroughFloors || targetPlayer.room.GetTile(intVector).Solid == false)
+        {
+            clippedTimer = 0;
+            return;
+        }
+        clippedTimer += 1;
+        if (clippedTimer % 40 == 0) UnityEngine.Debug.Log(clippedTimer);
+        if (clippedTimer < 200) return;
+
+        warping = true;
+
+    }
+
     void OnGameUpdate(On.RainWorldGame.orig_Update orig, RainWorldGame self)
     {
         orig(self);
         LogTimed(480, 1, logString);
-        logString = "";
+        logString = "#";
 
         logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead: {pursuerDead} #";
 
@@ -122,7 +182,23 @@ sealed class BackroomsMain : BaseUnityPlugin
         if (pursuerDead) return;
 
         if (self.world == null) return;
-        if (self.world.name != "BK") return;
+
+        if (targetPlayer == null)
+        {
+            for (int i = 0; i < self.Players.Count; i++)
+            {
+                if (self.Players[i] != null && self.Players[i].realizedCreature != null && !self.Players[i].realizedCreature.dead)
+                {
+                    targetPlayer = (self.Players[i].realizedCreature as Player);
+                }
+            }
+            return;
+        }
+        if (self.world.name != "BK")
+        {
+            WarpOnClipping(self);
+            return;
+        }
 
         logString += $"region is bk, bk has {self.world.NumberOfRooms} rooms #";
 
@@ -156,17 +232,6 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
         if (pursuer.state.dead) return;
         logString += $"pursuer is {pursuer} #";
-
-        if (targetPlayer == null)
-        {
-            for (int i = 0; i < self.Players.Count; i++)
-            {
-                if (self.Players[i] != null && self.Players[i].realizedCreature != null && !self.Players[i].realizedCreature.dead)
-                {
-                    targetPlayer = (self.Players[i].realizedCreature as Player);
-                }
-            }
-        }
 
         if (pursuer.abstractAI == null) return;
         if (pursuer.abstractAI.RealAI == null)

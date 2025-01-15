@@ -13,9 +13,9 @@
         </Reference>
     </ItemGroup>
 
-	<PropertyGroup>
-		<RainWorldDir>C:\Program Files (x86)\Steam\steamapps\common\Rain World</RainWorldDir>
-	</PropertyGroup>
+	<!-- <PropertyGroup> -->
+		<!-- <RainWorldDir>C:\Program Files (x86)\Steam\steamapps\common\Rain World</RainWorldDir> -->
+	<!-- </PropertyGroup> -->
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('$(RainWorldDir)')">
         <ItemGroup>

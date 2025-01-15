@@ -1,0 +1,22 @@
+DangerType: None
+CeilingDrips: 0
+RainIntensity: 0
+RumbleIntensity: 0
+WaveSpeed: 0.5
+WaveLength: 0.75
+WaveAmplitude: 0.03587852
+SecondWaveLength: 0.1666667
+SecondWaveAmplitude: 0
+Clouds: 0
+Grime: 0
+BkgDroneVolume: 0
+BkgDroneNoThreatVolume: 0
+RandomItemDensity: 0
+RandomItemSpearChance: 0
+WaterReflectionAlpha: 0
+Palette: 7
+EffectColorA: 0
+EffectColorB: 0
+Effects: Hue-0.08695652-20-20, 
+FadePalette: 20, 0.2104281
+WetTerrain: OFF
