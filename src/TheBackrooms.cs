@@ -31,7 +31,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     FadeOut fadeOut;
 
     int[] logCooldowns = new int[16];
-    bool[] logFlags = new bool[16]; 
+    bool[] logFlags = new bool[16];
     string logString = "";
 
     bool shownRoomWarning = false;
@@ -45,14 +45,6 @@ sealed class BackroomsMain : BaseUnityPlugin
         On.RainWorldGame.Update += OnGameUpdate;
         On.AbstractSpaceVisualizer.ChangeRoom += OnChangeRoom;
         On.World.LoadWorld += OnLoadWorld;
-    }
-
-    public void OnDisable()
-    {
-        On.RainWorld.OnModsInit -= OnModsInit;
-        On.RainWorldGame.Update -= OnGameUpdate;
-        On.AbstractSpaceVisualizer.ChangeRoom -= OnChangeRoom;
-        On.World.LoadWorld -= OnLoadWorld;
     }
 
     void LogTimed(int time, int index, string logs)
@@ -114,7 +106,7 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
     }
 
-    void FadeOutForEveryone (RainWorldGame game, bool fadeIn)
+    void FadeOutForEveryone(RainWorldGame game, bool fadeIn)
     {
         foreach (AbstractCreature player in game.AlivePlayers)
         {
@@ -142,13 +134,22 @@ sealed class BackroomsMain : BaseUnityPlugin
                 fadeOut = null;
                 warping = false;
 
-                foreach (AbstractCreature player in game.AlivePlayers)
+                foreach (AbstractCreature abstractPlayer in game.AlivePlayers)
                 {
-                    player.realizedCreature.Stun(120);
+                    Creature player = abstractPlayer.realizedCreature;
+                    player.Stun(120);
+                    // player.Move(new WorldCoordinate(player.Room.index, 460, 480, -1));
+                    foreach (BodyChunk bodyChunk in player.bodyChunks)
+                    {
+                        bodyChunk.vel = Custom.DegToVec(UnityEngine.Random.value * 360f) * 12f;
+                        bodyChunk.pos = new Vector2(460, 480);
+                        bodyChunk.lastPos = new Vector2(460, 480);
+                    }
                 }
                 FadeOutForEveryone(game, fadeIn: true);
                 UnityEngine.Debug.Log("fading in");
                 game.cameras[0].ExitCutsceneMode();
+                fadeOut = null;
             }
             return;
         }
