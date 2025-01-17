@@ -45,6 +45,7 @@ sealed class BackroomsMain : BaseUnityPlugin
         On.RainWorldGame.Update += OnGameUpdate;
         On.AbstractSpaceVisualizer.ChangeRoom += OnChangeRoom;
         On.World.LoadWorld += OnLoadWorld;
+        On.Mushroom.BitByPlayer += OnEatMushroom;
     }
 
     void LogTimed(int time, int index, string logs)
@@ -184,6 +185,15 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         if (self.world == null) return;
 
+        foreach (AbstractCreature abstractPlayer in self.AlivePlayers)
+        {
+            Player player = (abstractPlayer?.realizedCreature as Player);
+            if (player.mushroomCounter <= 0)
+            {
+                player.CollideWithTerrain = true;
+            }
+        }
+
         if (targetPlayer == null)
         {
             for (int i = 0; i < self.Players.Count; i++)
@@ -273,4 +283,12 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
 
     }
+
+    private void OnEatMushroom(On.Mushroom.orig_BitByPlayer orig, Mushroom self, Creature.Grasp grasp, bool eu)
+    {
+        (grasp.grabber as Player).CollideWithTerrain = false;
+        UnityEngine.Debug.Log("shroom noclip");
+        orig(self, grasp, eu);
+    }
+
 }
