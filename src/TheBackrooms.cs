@@ -286,8 +286,12 @@ sealed class BackroomsMain : BaseUnityPlugin
 
     private void OnEatMushroom(On.Mushroom.orig_BitByPlayer orig, Mushroom self, Creature.Grasp grasp, bool eu)
     {
-        (grasp.grabber as Player).CollideWithTerrain = false;
-        UnityEngine.Debug.Log("shroom noclip");
+        float randomNumber = UnityEngine.Random.value;
+        if (randomNumber >= BackroomsOptions.noclipMushroomChance.Value)
+        {
+            (grasp.grabber as Player).CollideWithTerrain = false;
+        }
+        UnityEngine.Debug.Log($"shroom noclip {randomNumber} >= {BackroomsOptions.noclipMushroomChance.Value}");
         orig(self, grasp, eu);
     }
 

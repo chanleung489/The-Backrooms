@@ -7,6 +7,7 @@ sealed class BackroomsOptions : OptionInterface
 {
     public static Configurable<int> dangerlevel;
     public static Configurable<bool> scaryWarning;
+    public static Configurable<float> noclipMushroomChance;
 
     public BackroomsOptions()
     {
@@ -23,6 +24,14 @@ sealed class BackroomsOptions : OptionInterface
             defaultValue: false,
             info: new ConfigurableInfo("Show scary warning")
         );
+        noclipMushroomChance = this.config.Bind<float>(
+            key: "noclipMushroomChance",
+            defaultValue: 0.5f,
+            info: new ConfigurableInfo(
+                description: "Determines the chance of getting noclip ability after eating mushrooms",
+                acceptable: new ConfigAcceptableRange<float>(0, 1)
+            )
+        );
     }
 
     public override void Initialize()
@@ -38,18 +47,23 @@ sealed class BackroomsOptions : OptionInterface
         {
             new OpLabel(x, y -= 40, "The Backrooms settings", true),
 
-            new OpLabel(new Vector2(x + 40, y -= 30), Vector2.zero, "Danger Level"),
-            new OpSliderTick(dangerlevel, new Vector2(x + 110, y - 6), 300)
+            new OpSliderTick(dangerlevel, new Vector2(x += 20, y -= 36), 300)
             {
                 description = dangerlevel.info.description
             },
+            new OpLabel(new Vector2(x + 320, y), new Vector2(240f, 30f), "Danger Level", alignment: FLabelAlignment.Left),
 
-            new OpLabel(new Vector2(x + 40, y -= 30), Vector2.zero, "Scary Warning"),
-            new OpCheckBox(scaryWarning, new Vector2(x + 100, y - 4))
+            new OpCheckBox(scaryWarning, new Vector2(x, y -= 36))
             {
                 description = scaryWarning.info.description
             },
+            new OpLabel(new Vector2(x + 40, y), new Vector2(240f, 30f), "Scary Warning", alignment: FLabelAlignment.Left),
 
+            new OpUpdown(noclipMushroomChance, new Vector2(x, y -= 36), 80f)
+            {
+                description = noclipMushroomChance.info.description
+            },
+            new OpLabel(new Vector2(x + 110, y), new Vector2(240f, 30f), "Mushroom Noclip chance", alignment: FLabelAlignment.Left),
         };
 
         Tabs[0].AddItems(uielements);
