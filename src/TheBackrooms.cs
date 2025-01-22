@@ -2,6 +2,7 @@
 using MoreSlugcats;
 using RWCustom;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Permissions;
 using UnityEngine;
 
@@ -28,7 +29,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     bool pursuerDead;
     bool warping;
     int clippedTimer = 0;
-    FadeOut fadeOut;
+    HashSet<FadeOut> fadeouts = new HashSet<FadeOut>();
 
     int[] logCooldowns = new int[16];
     bool[] logFlags = new bool[16];
@@ -46,6 +47,20 @@ sealed class BackroomsMain : BaseUnityPlugin
         On.AbstractSpaceVisualizer.ChangeRoom += OnChangeRoom;
         On.World.LoadWorld += OnLoadWorld;
         On.Mushroom.BitByPlayer += OnEatMushroom;
+        // On.Options.ControlSetup.GetAxis += OnGetAxis;
+    }
+
+    private float OnGetAxis(On.Options.ControlSetup.orig_GetAxis orig, Options.ControlSetup self, int actionID)
+    {
+        float result = orig(self, actionID);
+        LogBoth($"axis {actionID}: {result}");
+        return result;
+    }
+
+    void LogBoth(string log)
+    {
+        UnityEngine.Debug.Log(log);
+        Logger.LogDebug(log);
     }
 
     void LogTimed(int time, int index, string logs)
@@ -60,10 +75,9 @@ sealed class BackroomsMain : BaseUnityPlugin
         {
             return;
         }
-        foreach (var log in logs.Split('#'))
+        foreach (string log in logs.Split('#'))
         {
-            UnityEngine.Debug.Log(log);
-            Logger.LogDebug(log);
+            LogBoth(log);
         }
         logFlags[index] = true;
     }
@@ -107,68 +121,81 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
     }
 
-    void FadeOutForEveryone(RainWorldGame game, bool fadeIn)
+    void fadeoutForAll(RainWorldGame game, bool fadeIn = false)
     {
-        foreach (AbstractCreature player in game.AlivePlayers)
+        foreach (AbstractCreature player in game.NonPermaDeadPlayers)
         {
             if (!game.cameras[0].InCutscene)
             {
                 game.cameras[0].EnterCutsceneMode(player, RoomCamera.CameraCutsceneType.EndingOE);
             }
-            if (fadeOut == null)
-            {
-                fadeOut = new FadeOut(player.Room.realizedRoom, Color.black, 60f, fadeIn);
-                player.Room.realizedRoom.AddObject(fadeOut);
-            }
+            Room room = player.Room.realizedRoom;
+            if (room.drawableObjects.Any(x => x is FadeOut)) continue;
+            FadeOut fadeout = new FadeOut(room, Color.black, 60f, fadeIn);
+            fadeouts.Add(fadeout);
+            player.Room.realizedRoom.AddObject(fadeout);
         }
+    }
+
+    string RandomRoom(AbstractRoom[] rooms)
+    {
+        string destRoom = "BK_A001";
+        for (int i = 0; i < 10; i++)
+        {
+            destRoom = rooms[Random.Range(0, rooms.Length)].name;
+            if (destRoom.Contains("_A")) return destRoom;
+        }
+        return "BK_A001";
     }
 
     void WarpOnClipping(RainWorldGame game)
     {
         if (warping)
         {
-            FadeOutForEveryone(game, fadeIn: false);
-            if (fadeOut != null && fadeOut.IsDoneFading())
-            {
-                RegionSwitcher warper = new RegionSwitcher();
-                warper.SwitchRegions(game, "BK", "BK_A001", new IntVector2(460, 480));
-                fadeOut = null;
-                warping = false;
+            fadeoutForAll(game);
+            if (!fadeouts.All(x => x.IsDoneFading())) return;
+            fadeouts.Clear();
 
-                foreach (AbstractCreature abstractPlayer in game.AlivePlayers)
+            RegionSwitcher warper = new RegionSwitcher();
+            string destRoom = RandomRoom(game.world.abstractRooms);
+            LogBoth($"dest {destRoom}");
+            warper.SwitchRegions(game, "BK", "BK_A001", new IntVector2(0, 0));
+
+            foreach (AbstractCreature abstractPlayer in game.NonPermaDeadPlayers)
+            {
+                Player player = abstractPlayer.realizedCreature as Player;
+                player.Stun(120);
+                player.CollideWithTerrain = true;
+                foreach (BodyChunk bodyChunk in player.bodyChunks)
                 {
-                    Creature player = abstractPlayer.realizedCreature;
-                    player.Stun(120);
-                    // player.Move(new WorldCoordinate(player.Room.index, 460, 480, -1));
-                    foreach (BodyChunk bodyChunk in player.bodyChunks)
-                    {
-                        bodyChunk.vel = Custom.DegToVec(UnityEngine.Random.value * 360f) * 12f;
-                        bodyChunk.pos = new Vector2(460, 480);
-                        bodyChunk.lastPos = new Vector2(460, 480);
-                    }
+                    bodyChunk.vel = Custom.DegToVec(UnityEngine.Random.value * 360f) * 12f;
+                    bodyChunk.pos = new Vector2(460, 480);
+                    bodyChunk.lastPos = new Vector2(460, 480);
                 }
-                FadeOutForEveryone(game, fadeIn: true);
-                UnityEngine.Debug.Log("fading in");
-                game.cameras[0].ExitCutsceneMode();
-                fadeOut = null;
             }
+            fadeoutForAll(game, fadeIn: true);
+            fadeouts.Clear();
+            LogBoth("fading in");
+            game.cameras[0].ExitCutsceneMode();
+            game.cameras[0].virtualMicrophone.AllQuiet();
+            warping = false;
             return;
         }
 
         if (targetPlayer.room == null) return;
-        IntVector2 intVector = targetPlayer.room.GetTilePosition((targetPlayer.mainBodyChunk.pos.y < targetPlayer.bodyChunks[1].pos.y) ? targetPlayer.mainBodyChunk.pos : targetPlayer.bodyChunks[1].pos);
-        //Room.Tile.TerrainType terrainType = targetPlayer.room.GetTile(intVector).Terrain;
-        //LogTimed(20, 2, $"player pos terrain: {terrainType}");
-        if (!targetPlayer.GoThroughFloors || targetPlayer.room.GetTile(intVector).Solid == false)
+        IntVector2 playerTilePos = targetPlayer.room.GetTilePosition((targetPlayer.mainBodyChunk.pos.y < targetPlayer.bodyChunks[1].pos.y) ? targetPlayer.mainBodyChunk.pos : targetPlayer.bodyChunks[1].pos);
+        if (!targetPlayer.GoThroughFloors || targetPlayer.room.GetTile(playerTilePos).Solid == false)
         {
             clippedTimer = 0;
             return;
         }
         clippedTimer += 1;
+        if (targetPlayer.mushroomCounter > 0) clippedTimer += 1;
         if (clippedTimer % 40 == 0) UnityEngine.Debug.Log(clippedTimer);
         if (clippedTimer < 200) return;
 
         warping = true;
+        LogBoth("warping");
 
     }
 
@@ -185,10 +212,10 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         if (self.world == null) return;
 
-        foreach (AbstractCreature abstractPlayer in self.AlivePlayers)
+        foreach (AbstractCreature abstractPlayer in self.Players)
         {
             Player player = (abstractPlayer?.realizedCreature as Player);
-            if (player.mushroomCounter <= 0)
+            if (player.mushroomCounter <= 300)
             {
                 player.CollideWithTerrain = true;
             }
@@ -196,11 +223,11 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         if (targetPlayer == null)
         {
-            for (int i = 0; i < self.Players.Count; i++)
+            foreach (AbstractCreature abstractPlayer in self.AlivePlayers)
             {
-                if (self.Players[i] != null && self.Players[i].realizedCreature != null && !self.Players[i].realizedCreature.dead)
+                if (abstractPlayer?.realizedCreature is Player player)
                 {
-                    targetPlayer = (self.Players[i].realizedCreature as Player);
+                    targetPlayer = player;
                 }
             }
             return;
@@ -287,11 +314,11 @@ sealed class BackroomsMain : BaseUnityPlugin
     private void OnEatMushroom(On.Mushroom.orig_BitByPlayer orig, Mushroom self, Creature.Grasp grasp, bool eu)
     {
         float randomNumber = UnityEngine.Random.value;
-        if (randomNumber >= BackroomsOptions.noclipMushroomChance.Value)
+        if (BackroomsOptions.noclipMushroomChance.Value >= randomNumber)
         {
             (grasp.grabber as Player).CollideWithTerrain = false;
         }
-        UnityEngine.Debug.Log($"shroom noclip {randomNumber} >= {BackroomsOptions.noclipMushroomChance.Value}");
+        UnityEngine.Debug.Log($"shroom noclip {BackroomsOptions.noclipMushroomChance.Value} >= {randomNumber}");
         orig(self, grasp, eu);
     }
 
