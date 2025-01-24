@@ -20,7 +20,9 @@ sealed class BackroomsMain : BaseUnityPlugin
     public const string PLUGIN_NAME = "The Backrooms";
     public const string PLUGIN_VERSION = "1.2";
 
-    static readonly int BK_CENTER_ROOM_INDEX = 87;
+    const int SECOND = 40;
+    const int MUSHROOM_DURATION = 320;
+    const int BK_CENTER_ROOM_INDEX = 87;
 
     AbstractCreature pursuer;
     Player targetPlayer;
@@ -47,14 +49,6 @@ sealed class BackroomsMain : BaseUnityPlugin
         On.AbstractSpaceVisualizer.ChangeRoom += OnChangeRoom;
         On.World.LoadWorld += OnLoadWorld;
         On.Mushroom.BitByPlayer += OnEatMushroom;
-        // On.Options.ControlSetup.GetAxis += OnGetAxis;
-    }
-
-    private float OnGetAxis(On.Options.ControlSetup.orig_GetAxis orig, Options.ControlSetup self, int actionID)
-    {
-        float result = orig(self, actionID);
-        LogBoth($"axis {actionID}: {result}");
-        return result;
     }
 
     void LogBoth(string log)
@@ -111,8 +105,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     {
         orig(self, newRoom);
 
-        if (self.room == null) return;
-        if (shownRoomWarning) return;
+        if (!BackroomsOptions.showWarning.Value || self.room == null || shownRoomWarning) return;
 
         if (self.room.abstractRoom == self.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + self.world.firstRoomIndex))
         {
@@ -131,21 +124,10 @@ sealed class BackroomsMain : BaseUnityPlugin
             }
             Room room = player.Room.realizedRoom;
             if (room.drawableObjects.Any(x => x is FadeOut)) continue;
-            FadeOut fadeout = new FadeOut(room, Color.black, 60f, fadeIn);
+            FadeOut fadeout = new FadeOut(room, Color.black, 2 * SECOND, fadeIn);
             fadeouts.Add(fadeout);
             player.Room.realizedRoom.AddObject(fadeout);
         }
-    }
-
-    string RandomRoom(AbstractRoom[] rooms)
-    {
-        string destRoom = "BK_A001";
-        for (int i = 0; i < 10; i++)
-        {
-            destRoom = rooms[Random.Range(0, rooms.Length)].name;
-            if (destRoom.Contains("_A")) return destRoom;
-        }
-        return "BK_A001";
     }
 
     void WarpOnClipping(RainWorldGame game)
@@ -157,14 +139,12 @@ sealed class BackroomsMain : BaseUnityPlugin
             fadeouts.Clear();
 
             RegionSwitcher warper = new RegionSwitcher();
-            string destRoom = RandomRoom(game.world.abstractRooms);
-            LogBoth($"dest {destRoom}");
             warper.SwitchRegions(game, "BK", "BK_A001", new IntVector2(0, 0));
 
             foreach (AbstractCreature abstractPlayer in game.NonPermaDeadPlayers)
             {
                 Player player = abstractPlayer.realizedCreature as Player;
-                player.Stun(120);
+                player.Stun(3 * SECOND);
                 player.CollideWithTerrain = true;
                 foreach (BodyChunk bodyChunk in player.bodyChunks)
                 {
@@ -191,73 +171,31 @@ sealed class BackroomsMain : BaseUnityPlugin
         }
         clippedTimer += 1;
         if (targetPlayer.mushroomCounter > 0) clippedTimer += 1;
-        if (clippedTimer % 40 == 0) UnityEngine.Debug.Log(clippedTimer);
-        if (clippedTimer < 200) return;
+        if (clippedTimer % SECOND == 0) UnityEngine.Debug.Log(clippedTimer);
+        if (clippedTimer < BackroomsOptions.prewarpDuration.Value * SECOND) return;
 
         warping = true;
         LogBoth("warping");
 
     }
 
-    void OnGameUpdate(On.RainWorldGame.orig_Update orig, RainWorldGame self)
+    void PursuePlayer(RainWorldGame game)
     {
-        orig(self);
-        LogTimed(480, 1, logString);
-        logString = "#";
-
-        logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead: {pursuerDead} #";
-
-        if (BackroomsOptions.dangerlevel.Value == 2) return;
-        if (pursuerDead) return;
-
-        if (self.world == null) return;
-
-        foreach (AbstractCreature abstractPlayer in self.Players)
-        {
-            Player player = (abstractPlayer?.realizedCreature as Player);
-            if (player.mushroomCounter <= 300)
-            {
-                player.CollideWithTerrain = true;
-            }
-        }
-
-        if (targetPlayer == null)
-        {
-            foreach (AbstractCreature abstractPlayer in self.AlivePlayers)
-            {
-                if (abstractPlayer?.realizedCreature is Player player)
-                {
-                    targetPlayer = player;
-                }
-            }
-            return;
-        }
-        if (self.world.name != "BK")
-        {
-            WarpOnClipping(self);
-            return;
-        }
-
-        logString += $"region is bk, bk has {self.world.NumberOfRooms} rooms #";
+        logString += $"region is bk, bk has {game.world.NumberOfRooms} rooms #";
 
         if (pursuer == null)
         {
-            AbstractRoom abstractRoom = self.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + self.world.firstRoomIndex);
-            if (abstractRoom == null)
+            AbstractRoom centerRoom = game.world.GetAbstractRoom(BK_CENTER_ROOM_INDEX + game.world.firstRoomIndex);
+
+            if (centerRoom?.creatures.Count <= 0) return;
+            logString += $"room {centerRoom.name} has creatures #";
+
+            for (int j = 0; j < centerRoom.creatures.Count; j++)
             {
-                return;
-            }
-            if (abstractRoom.creatures.Count <= 0)
-            {
-                return;
-            }
-            logString += $"room {abstractRoom.name} has creatures #";
-            for (int j = 0; j < abstractRoom.creatures.Count; j++)
-            {
-                logString += $"creature {j} is {abstractRoom.creatures[j].creatureTemplate.type} #";
-                if (abstractRoom.creatures[j].creatureTemplate.type == MoreSlugcatsEnums.CreatureTemplateType.TrainLizard)
+                logString += $"creature {j} is {centerRoom.creatures[j].creatureTemplate.type} #";
+                if (centerRoom.creatures[j].creatureTemplate.type == MoreSlugcatsEnums.CreatureTemplateType.TrainLizard)
                 {
-                    pursuer = abstractRoom.creatures[j];
+                    pursuer = centerRoom.creatures[j];
                     break;
                 }
             }
@@ -271,43 +209,80 @@ sealed class BackroomsMain : BaseUnityPlugin
         if (pursuer.state.dead) return;
         logString += $"pursuer is {pursuer} #";
 
-        if (pursuer.abstractAI == null) return;
-        if (pursuer.abstractAI.RealAI == null)
+        if (pursuer.abstractAI?.RealAI == null)
         {
-            logString += "pursuer realai is null #";
-            pursuer.Room.RealizeRoom(self.world, self);
+            pursuer.Room.RealizeRoom(game.world, game);
             return;
         }
-        if (pursuer.abstractAI.RealAI.tracker == null)
-        {
-            logString += "pursuer tracker is null #";
-            return;
-        }
-        pursuer.abstractAI.RealAI.tracker.SeeCreature(targetPlayer.abstractCreature);
-        logString += $"pursuer sees player, pursuer agression: {pursuer.abstractAI.RealAI.CurrentPlayerAggression(targetPlayer.abstractCreature)} #";
+        pursuer.abstractAI.RealAI.tracker?.SeeCreature(targetPlayer.abstractCreature);
+        logString += $"pursuer agression: {pursuer.abstractAI.RealAI.CurrentPlayerAggression(targetPlayer.abstractCreature)} #";
+
         if (currentRoom != pursuer.Room.name)
         {
             UnityEngine.Debug.Log("Pursuer moving from: " + currentRoom + " to " + pursuer.Room.name);
             currentRoom = pursuer.Room.name;
         }
-        if (pursuer.abstractAI.destination != destination)
+
+        if (destination.room != pursuer.pos.room)
         {
             destination = targetPlayer.abstractCreature.pos;
             pursuer.abstractAI.SetDestination(destination);
         }
 
-        if (!BackroomsOptions.scaryWarning.Value)
-        {
-            logString += "scary warning: " + BackroomsOptions.scaryWarning.Value;
-            return;
-        }
         if (shownWarning) return;
         foreach (int connection in pursuer.Room.connections)
         {
-            if (connection != targetPlayer.abstractCreature.pos.room || pursuer.abstractAI.destination != destination) continue;
-            self.world.game.cameras[0].hud.textPrompt.AddMessage("DONT MOVE STAY STILL", 10, 250, true, true);
+            if (connection != targetPlayer.abstractCreature.pos.room) continue;
+            game.world.game.cameras[0].hud.textPrompt.AddMessage("DONT MOVE STAY STILL", 10, 250, true, true);
             shownWarning = true;
         }
+
+    }
+
+    void OnGameUpdate(On.RainWorldGame.orig_Update orig, RainWorldGame self)
+    {
+        orig(self);
+        LogTimed(12 * SECOND, 1, logString);
+        logString = "#";
+
+        logString += $"danger level: {BackroomsOptions.dangerlevel.Value} pursuer dead: {pursuerDead} #";
+
+        if (self.world == null) return;
+
+        if (targetPlayer == null)
+        {
+            foreach (AbstractCreature abstractPlayer in self.AlivePlayers)
+            {
+                if (abstractPlayer?.realizedCreature is Player player)
+                {
+                    if (!player.dead) targetPlayer = player;
+                    break;
+                }
+            }
+            return;
+        }
+
+        if (self.world.name != "BK")
+        {
+            if (BackroomsOptions.noclipWarp.Value) WarpOnClipping(self);
+        }
+
+        foreach (AbstractCreature abstractPlayer in self.Players)
+        {
+            Player player = (abstractPlayer?.realizedCreature as Player);
+            if (player.mushroomCounter <= MUSHROOM_DURATION - BackroomsOptions.noclipDuration.Value * SECOND)
+            {
+                player.CollideWithTerrain = true;
+            }
+        }
+
+        if (!BackroomsOptions.showWarning.Value)
+        {
+            logString += "scary warning: " + BackroomsOptions.showWarning.Value;
+        }
+
+        if (BackroomsOptions.dangerlevel.Value == 2 || pursuerDead || self.world.name != "BK") return;
+        PursuePlayer(self);
 
     }
 
