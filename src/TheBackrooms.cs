@@ -176,6 +176,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 
         warping = true;
         LogBoth("warping");
+        game.world.game.cameras[0].hud.textPrompt.AddMessage("warping... (please do NOT press any buttons during the warp)", 10, 250, false, true);
 
     }
 
@@ -229,7 +230,7 @@ sealed class BackroomsMain : BaseUnityPlugin
             pursuer.abstractAI.SetDestination(destination);
         }
 
-        if (shownWarning) return;
+        if (shownWarning || !BackroomsOptions.showWarning.Value) return;
         foreach (int connection in pursuer.Room.connections)
         {
             if (connection != targetPlayer.abstractCreature.pos.room) continue;
@@ -276,10 +277,7 @@ sealed class BackroomsMain : BaseUnityPlugin
             }
         }
 
-        if (!BackroomsOptions.showWarning.Value)
-        {
-            logString += "scary warning: " + BackroomsOptions.showWarning.Value;
-        }
+        logString += "scary warning: " + BackroomsOptions.showWarning.Value;
 
         if (BackroomsOptions.dangerlevel.Value == 2 || pursuerDead || self.world.name != "BK") return;
         PursuePlayer(self);
