@@ -18,7 +18,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 {
     public const string PLUGIN_GUID = "znery.backrooms";
     public const string PLUGIN_NAME = "The Backrooms";
-    public const string PLUGIN_VERSION = "1.2";
+    public const string PLUGIN_VERSION = "1.2.1";
 
     const int SECOND = 40;
     const int MUSHROOM_DURATION = 320;
@@ -162,12 +162,17 @@ sealed class BackroomsMain : BaseUnityPlugin
             return;
         }
 
-        if (targetPlayer.room == null) return;
-        IntVector2 playerTilePos = targetPlayer.room.GetTilePosition((targetPlayer.mainBodyChunk.pos.y < targetPlayer.bodyChunks[1].pos.y) ? targetPlayer.mainBodyChunk.pos : targetPlayer.bodyChunks[1].pos);
-        if (!targetPlayer.GoThroughFloors || targetPlayer.room.GetTile(playerTilePos).Solid == false)
+        foreach (AbstractCreature abstractPlayer in game.NonPermaDeadPlayers)
         {
-            clippedTimer = 0;
-            return;
+            Player player = abstractPlayer.realizedCreature as Player;
+            if (player.room == null) continue;
+            IntVector2 playerTilePos = player.room.GetTilePosition((targetPlayer.mainBodyChunk.pos.y < targetPlayer.bodyChunks[1].pos.y) ? targetPlayer.mainBodyChunk.pos : targetPlayer.bodyChunks[1].pos);
+            if (!player.GoThroughFloors || targetPlayer.room.GetTile(playerTilePos).Solid == false)
+            {
+                clippedTimer = 0;
+                return;
+            }
+            if (BackroomsOptions.warpOnAny.Value) break;
         }
         clippedTimer += 1;
         if (targetPlayer.mushroomCounter > 0) clippedTimer += 1;
