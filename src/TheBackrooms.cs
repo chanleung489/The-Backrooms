@@ -1,6 +1,9 @@
 ﻿using BepInEx;
+using BepInEx.Logging;
+using HUD;
 using MoreSlugcats;
 using RWCustom;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Permissions;
@@ -23,6 +26,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     const int SECOND = 40;
     const int MUSHROOM_DURATION = 320;
     const int BK_CENTER_ROOM_INDEX = 87;
+    public static new ManualLogSource Logger;
 
     AbstractCreature pursuer;
     Player targetPlayer;
@@ -30,7 +34,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     string currentRoom;
     bool pursuerDead;
     bool warping;
-    int clippedTimer = 0;
+    static int clippedTimer = 0;
     HashSet<FadeOut> fadeouts = new HashSet<FadeOut>();
 
     int[] logCooldowns = new int[16];
@@ -42,16 +46,26 @@ sealed class BackroomsMain : BaseUnityPlugin
 
     bool init;
 
+    public static float warpProgress
+    {
+        get
+        {
+            return (float) clippedTimer / (BackroomsOptions.prewarpDuration.Value * SECOND);
+        }
+    }
+
     public void OnEnable()
     {
+        Logger = base.Logger;
         On.RainWorld.OnModsInit += OnModsInit;
         On.RainWorldGame.Update += OnGameUpdate;
         On.AbstractSpaceVisualizer.ChangeRoom += OnChangeRoom;
         On.World.LoadWorld += OnLoadWorld;
         On.Mushroom.BitByPlayer += OnEatMushroom;
+        On.HUD.HUD.InitSinglePlayerHud += OnInitHud;
     }
 
-    void LogBoth(string log)
+    public static void LogBoth(string log)
     {
         UnityEngine.Debug.Log(log);
         Logger.LogDebug(log);
@@ -175,8 +189,13 @@ sealed class BackroomsMain : BaseUnityPlugin
             if (BackroomsOptions.warpOnAny.Value) break;
         }
         clippedTimer += 1;
-        if (targetPlayer.mushroomCounter > 0) clippedTimer += 1;
-        if (clippedTimer % SECOND == 0) UnityEngine.Debug.Log(clippedTimer);
+        if (targetPlayer.mushroomEffect > 0) clippedTimer += 1;
+        if (clippedTimer % SECOND == 0) {
+            // UnityEngine.Debug.Log(clippedTimer);
+            LogBoth($"clippedTimer {clippedTimer}");
+            LogBoth($"prewarpDuration {BackroomsOptions.prewarpDuration.Value * SECOND}");
+            LogBoth($"warpProgress {warpProgress}");
+        }
         if (clippedTimer < BackroomsOptions.prewarpDuration.Value * SECOND) return;
 
         warping = true;
@@ -268,9 +287,9 @@ sealed class BackroomsMain : BaseUnityPlugin
             return;
         }
 
-        if (self.world.name != "BK")
+        if (BackroomsOptions.noclipWarp.Value && self.world.name != "BK" && !targetPlayer.inShortcut)
         {
-            if (BackroomsOptions.noclipWarp.Value) WarpOnClipping(self);
+            WarpOnClipping(self);
         }
 
         foreach (AbstractCreature abstractPlayer in self.Players)
@@ -300,4 +319,90 @@ sealed class BackroomsMain : BaseUnityPlugin
         orig(self, grasp, eu);
     }
 
+    private void OnInitHud(On.HUD.HUD.orig_InitSinglePlayerHud orig, HUD.HUD self, RoomCamera cam)
+    {
+        orig(self, cam);
+        self.AddPart(new PreWarpProgressMeter(self, self.fContainers[1]));
+    }
+
+}
+
+public class PreWarpProgressMeter : HudPart
+{
+    private float warpProgress = 0;
+
+    private Vector2 pos;
+    private Vector2 lastPos;
+    private HUDCircle[] circles;
+    private float fade;
+    private float lastFade;
+    private FContainer myContainer;
+    private Player hudPlayer
+    {
+        get
+        {
+            return this.hud.owner as Player;
+        }
+    }
+
+    private bool Show
+    {
+        get
+        {
+            return this.hudPlayer != null && !this.hudPlayer.abstractCreature.world.game.GameOverModeActive && !this.hudPlayer.dead;
+        }
+    }
+
+    public PreWarpProgressMeter(HUD.HUD hud, FContainer fContainer) : base(hud)
+    {
+        this.circles = new HUDCircle[5];
+        this.pos = new Vector2(hud.rainWorld.options.ScreenSize.x / 2f - (float)this.circles.Length * 21.6f / 2f, 40f);
+        this.lastPos = this.pos;
+        this.fade = 0f;
+        this.lastFade = 0f;
+        for (int i = 0; i < this.circles.Length; i++)
+        {
+            this.circles[i] = new HUDCircle(hud, HUDCircle.SnapToGraphic.smallEmptyCircle, fContainer, 0);
+            this.circles[i].fade = 0f;
+            this.circles[i].lastFade = 0f;
+        }
+        this.myContainer = fContainer;
+    }
+
+    public override void Update()
+    {
+        this.warpProgress = TheBackrooms.BackroomsMain.warpProgress;
+        if (warpProgress <= 0f || warpProgress >= 1f)
+        {
+            this.fade = Mathf.Lerp(this.fade, 0f, 0.2f);
+        }
+        else
+        {
+            this.fade = Mathf.Lerp(this.fade, this.Show ? 1f : 0f, 0.2f);
+        }
+        this.lastPos = this.pos;
+        this.lastFade = this.fade;
+        float num = 1f / (float)this.circles.Length;
+        float num2 = Mathf.InverseLerp(1f, 0f, warpProgress);
+        for (int i = 0; i < this.circles.Length; i++)
+        {
+            float value = num2 - num * (float)i;
+            this.circles[i].Update();
+            this.circles[i].thickness = Mathf.Lerp(6f, 1f, Mathf.InverseLerp(num, 0f, value));
+            this.circles[i].fade = Mathf.Lerp(this.circles[i].fade, Mathf.InverseLerp(num * (float)i, num * ((float)i + 1f), this.fade), 0.1f);
+            this.circles[i].snapGraphic = HUDCircle.SnapToGraphic.smallEmptyCircle;
+            this.circles[i].snapRad = 0.45f;
+            this.circles[i].snapThickness = 0.45f;
+            this.circles[i].rad = Mathf.Lerp(0.1f, 5f, this.circles[i].fade);
+            this.circles[i].pos = this.pos + new Vector2((float)i * 21.6f, 0f);
+        }
+    }
+
+    public override void Draw(float timeStacker)
+    {
+        for (int i = 0; i < this.circles.Length; i++)
+        {
+            this.circles[i].Draw(timeStacker);
+        }
+    }
 }
