@@ -21,7 +21,7 @@ sealed class BackroomsMain : BaseUnityPlugin
 {
     public const string PLUGIN_GUID = "znery.backrooms";
     public const string PLUGIN_NAME = "The Backrooms";
-    public const string PLUGIN_VERSION = "1.2.1";
+    public const string PLUGIN_VERSION = "1.2.2";
 
     const int SECOND = 40;
     const int MUSHROOM_DURATION = 320;
@@ -150,6 +150,10 @@ sealed class BackroomsMain : BaseUnityPlugin
         {
             fadeoutForAll(game);
             if (!fadeouts.All(x => x.IsDoneFading())) return;
+            foreach (FadeOut fadeout in fadeouts)
+            {
+                fadeout.Destroy();
+            }
             fadeouts.Clear();
 
             RegionSwitcher warper = new RegionSwitcher();
@@ -322,7 +326,7 @@ sealed class BackroomsMain : BaseUnityPlugin
     private void OnInitHud(On.HUD.HUD.orig_InitSinglePlayerHud orig, HUD.HUD self, RoomCamera cam)
     {
         orig(self, cam);
-        self.AddPart(new PreWarpProgressMeter(self, self.fContainers[1]));
+        if (BackroomsOptions.progressMeter.Value) self.AddPart(new PreWarpProgressMeter(self, self.fContainers[1]));
     }
 
 }
@@ -382,6 +386,14 @@ public class PreWarpProgressMeter : HudPart
         }
         this.lastPos = this.pos;
         this.lastFade = this.fade;
+
+        FLabel label = new FLabel(Custom.GetFont(), "Warp Progress");
+        this.myContainer.AddChild(label);
+        label.alignment = FLabelAlignment.Left;
+        label.x = this.pos.x + (float)(this.circles.Length + 1) * 21.6f / 2f + 10f + label.textRect.width / 2f;
+        label.y = this.pos.y;
+        label.alpha = this.fade;
+
         float num = 1f / (float)this.circles.Length;
         float num2 = Mathf.InverseLerp(1f, 0f, warpProgress);
         for (int i = 0; i < this.circles.Length; i++)

@@ -9,6 +9,7 @@ sealed class BackroomsOptions : OptionInterface
     public static Configurable<bool> showWarning;
     public static Configurable<bool> noclipWarp;
     public static Configurable<bool> warpOnAny;
+    public static Configurable<bool> progressMeter;
     public static Configurable<int> prewarpDuration;
     public static Configurable<float> noclipMushroomChance;
     public static Configurable<int> noclipDuration;
@@ -37,6 +38,11 @@ sealed class BackroomsOptions : OptionInterface
             key: "warpAll",
             defaultValue: false,
             info: new ConfigurableInfo("Warp all players when anyone is out of bounds")
+        );
+        progressMeter = this.config.Bind<bool>(
+            key: "progressMeter",
+            defaultValue: true,
+            info: new ConfigurableInfo("Show the warpping progress")
         );
         prewarpDuration = this.config.Bind<int>(
             key: "prewarpDuration",
@@ -100,6 +106,12 @@ sealed class BackroomsOptions : OptionInterface
                 description = warpOnAny.info.description
             },
             new OpLabel(new Vector2(x + 40, y), new Vector2(240f, 30f), "Warp Together", alignment: FLabelAlignment.Left),
+
+            new OpCheckBox(progressMeter, new Vector2(x, y -= 36))
+            {
+                description = progressMeter.info.description
+            },
+            new OpLabel(new Vector2(x + 40, y), new Vector2(240f, 30f), "Warp Progress Meter", alignment: FLabelAlignment.Left),
 
             new OpUpdown(prewarpDuration, new Vector2(x, y -= 36), 80f)
             {
